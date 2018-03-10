@@ -131,7 +131,7 @@ def warp_perspective(image,mtx,dist):
     return warped, M
 
 def polynomial(image):
-    ''' '''
+    '''Fit left and right lane '''
     # Take a histogram of the bottom half of the image
     histogram = np.sum(image[image.shape[0]//2:,:], axis=0)
     # Create an output image to draw on and  visualize the result
@@ -211,8 +211,28 @@ def polynomial(image):
     out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
     out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
     return leftx_base,rightx_base,left_fit,right_fit,left_fitx,right_fitx,ploty,out_img
+
+def curvature_radius_meter(trans, ploty, left_fitx, right_fitx ):
+    '''calculate the radius of curvature by meter'''
+    y_eval = np.max(ploty)
+    # Define conversions in x and y from pixels space to meters
+    ym_per_pix = 30/720 # meters per pixel in y dimension
+    xm_per_pix = 3.7/700 # meters per pixel in x dimension
+
+    # Fit new polynomials to x,y in world space
+    left_fit_cr = np.polyfit(ploty*ym_per_pix, left_fitx*xm_per_pix, 2)
+    right_fit_cr = np.polyfit(ploty*ym_per_pix, right_fitx*xm_per_pix, 2)
+
+    # Calculate the new radii of curvature
+    left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
+    right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+    # Now our radius of curvature is in meters
+    radi = [left_curverad, right_curverad]
+    curvature_string = "Radius of Curvature: " + str(int(radi[0])) + ", " + str(int(radi[1]))
+    return curvature_string
    
-def curvature_radius(trans, left_fit, right_fit):
+def curvature_radius_pixel(trans, left_fit, right_fit):
+    '''calculate the radius of curvature by pixel'''
     y_eval = np.max(trans[0])
     left_curverad = ((1 + (2*left_fit[0]*y_eval + left_fit[1])**2)**1.5) / np.absolute(2*left_fit[0])
     right_curverad = ((1 + (2*right_fit[0]*y_eval + right_fit[1])**2)**1.5) / np.absolute(2*right_fit[0])
@@ -220,10 +240,19 @@ def curvature_radius(trans, left_fit, right_fit):
     curvature_string = "Radius of Curvature: " + str(int(radi[0])) + ", " + str(int(radi[1]))
     return curvature_string
 
-def pos_from_center(trans, leftx_base, rightx_base):
+def pos_from_center_meter(trans, leftx_base, rightx_base):
+    '''calculate the distance between Vehicle and Center by meter '''
+    pos = trans.shape[1]/2
+    xm_per_pix = 3.7/700
+    offset = abs(pos - (leftx_base + rightx_base)/2)*xm_per_pix
+    location_string = "Vehicle Dist. from Center: " + str(round(offset,2)) +" m"
+    return location_string 
+
+def pos_from_center_pixel(trans, leftx_base, rightx_base):
+    '''calculate the distance between Vehicle and Center by meter '''
     pos = trans.shape[1]/2
     offset = abs(pos - (leftx_base + rightx_base)/2)
-    location_string = "Vehicle Dist. from Center: " + str(offset)
+    location_string = "Vehicle Dist. from Center: " + str(round(offset,2))+" pixels"
     return location_string 
 def map_lane(image,origin_image,perspective_M,left_fitx,right_fitx,ploty):
     # Create an image to draw the lines on
@@ -242,9 +271,9 @@ def map_lane(image,origin_image,perspective_M,left_fitx,right_fitx,ploty):
     # Combine the result with the original image
     final_result = cv2.addWeighted(origin_image, 1, newwarp, 0.3, 0)
     return final_result
-def final_image(image,origin_image,leftx_base, left_fit,rightx_base, right_fit):
-    curvature_string = curvature_radius(origin_image, left_fit, right_fit)
-    location_string = pos_from_center(origin_image, leftx_base, rightx_base)
+def final_image(image,leftx_base, left_fit,rightx_base, right_fit,ploty):
+    curvature_string = curvature_radius_meter(image,ploty, left_fit, right_fit)
+    location_string = pos_from_center_meter(image, leftx_base, rightx_base)
     font = cv2.FONT_HERSHEY_SIMPLEX
     cv2.putText(image,curvature_string,(400,50), font, 1,(255,255,255),2,cv2.LINE_AA)
     cv2.putText(image,location_string,(400,100), font, 1,(255,255,255),2,cv2.LINE_AA)
