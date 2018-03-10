@@ -73,40 +73,35 @@ def dir_threshold(image, sobel_kernel=3, thresh=(0, np.pi/2)):
 
     # Return the binary image
     return binary_output
+
+def hls_select(img, channel='s',thresh=(0, 255)):
+    '''hls color thresholds'''
+    hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
+    if channel=='s':
+        s_channel = hls[:,:,2]
+    elif channel=='h':
+        s_channel = hls[:,:,0]
+    elif channel=='l':
+        s_channel = hls[:,:,1]
+    binary_output = np.zeros_like(s_channel)
+    binary_output[(s_channel > thresh[0]) & (s_channel <= thresh[1])] = 1
+    return binary_output
     
-def combine_gradient(image,s_thresh=(170, 255), sx_thresh=(20, 100)):
+def combine_gradient(image,s_thresh=(170, 255), sx_thresh=(20, 100),l_thresh=(100,255)):
     '''Combined S channel and gradient thresholds'''
     # Convert to HLS color space and separate the S channel
-    hls = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
-    s_channel = hls[:,:,2]
-    
-    # Grayscale image
-    # NOTE: we already saw that standard grayscaling lost color information for the lane lines
-    # Explore gradients in other colors spaces / color channels to see what might work better
-    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    s_binary = hls_select(image, channel='s',thresh=s_thresh)
+
+    # Convert to HLS color space and separate the L channel
+    l_binary = hls_select(image, channel='l',thresh=l_thresh)
     
     # Sobel x
-    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0) # Take the derivative in x
-    abs_sobelx = np.absolute(sobelx) # Absolute x derivative to accentuate lines away from horizontal
-    scaled_sobel = np.uint8(255*abs_sobelx/np.max(abs_sobelx))
-    
-    # Threshold x gradient
     (thresh_min,thresh_max) = sx_thresh
-    sxbinary = np.zeros_like(scaled_sobel)
-    sxbinary[(scaled_sobel >= thresh_min) & (scaled_sobel <= thresh_max)] = 1
-    
-    # Threshold color channel
-    (s_thresh_min,s_thresh_max) = s_thresh
-    s_binary = np.zeros_like(s_channel)
-    s_binary[(s_channel >= s_thresh_min) & (s_channel <= s_thresh_max)] = 1
-    
-    # Stack each channel to view their individual contributions in green and blue respectively
-    # This returns a stack of the two binary images, whose components you can see as different colors
-    color_binary = np.dstack(( np.zeros_like(sxbinary), sxbinary, s_binary)) * 255
+    sxbinary = abs_sobel_thresh(image, orient='x', thresh_min=thresh_min, thresh_max=thresh_max)
     
     # Combine the two binary thresholds
     combined_binary = np.zeros_like(sxbinary)
-    combined_binary[(s_binary == 1) | (sxbinary == 1)] = 1
+    combined_binary[((s_binary == 1)&(l_binary ==1)) | (sxbinary == 1)] = 1
     return combined_binary
 
 def warp_perspective(image,mtx,dist):
@@ -119,12 +114,12 @@ def warp_perspective(image,mtx,dist):
     [[(img_size[0] / 2) - 55, img_size[1] / 2 + 100],
     [((img_size[0] / 6) - 10), img_size[1]],
     [(img_size[0] * 5 / 6) + 60, img_size[1]],
-    [(img_size[0] / 2 + 47), img_size[1] / 2 + 100]])
+    [(img_size[0] / 2 + 80), img_size[1] / 2 + 100]])
     dst = np.float32(
-    [[(img_size[0] / 4), 0],
-    [(img_size[0] / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), 0]])
+    [[(img_size[0] / 7), 0],
+    [(img_size[0] / 7), img_size[1]],
+    [(img_size[0] * 4 / 5), img_size[1]],
+    [(img_size[0] * 4 / 5), 0]])
     M = cv2.getPerspectiveTransform(src, dst)
     # Warp the image using OpenCV warpPerspective()
     warped = cv2.warpPerspective(image, M, img_size,flags=cv2.INTER_LINEAR)
@@ -154,9 +149,9 @@ def polynomial(image):
     leftx_current = leftx_base
     rightx_current = rightx_base
     # Set the width of the windows +/- margin
-    margin = 100
+    margin = 90 
     # Set minimum number of pixels found to recenter window
-    minpix = 50
+    minpix = 40
     # Create empty lists to receive left and right lane pixel indices
     left_lane_inds = []
     right_lane_inds = []
